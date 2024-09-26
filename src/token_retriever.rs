@@ -1,5 +1,3 @@
-#[cfg_attr(test, mockall_double::double)]
-use crate::authenticator::HttpAuthenticator;
 use crate::authenticator::{Authenticator, ClientAssertionType, GrantType, Request};
 use crate::jwt::claims::Claims;
 use crate::jwt::signer::JwtSigner;
@@ -8,23 +6,32 @@ use crate::jwt::signer::JwtSignerImpl;
 use crate::token::{Token, TokenType};
 use crate::{ClientID, TokenRetriever, TokenRetrieverError};
 use chrono::{TimeDelta, Utc};
+use std::str::FromStr;
 use std::sync::Mutex;
 use tracing::debug;
 use url::Url;
 
 /// A signed JWT should live enough for the System Identity Service to consume it.
 const DEFAULT_JWT_CLAIM_EXP: TimeDelta = TimeDelta::seconds(180);
+/// The "aud" (audience) claim identifies the recipients that the JWT is intended for.
+pub const DEFAULT_AUDIENCE: &str = "https://www.newrelic.com/";
 
-pub struct TokenRetrieverWithCache {
+pub struct TokenRetrieverWithCache<A>
+where
+    A: Authenticator,
+{
     client_id: ClientID,
-    token_url: Url,
+    aud: Url,
     tokens: Mutex<Option<Token>>,
     jwt_signer: JwtSignerImpl,
-    authenticator: HttpAuthenticator,
+    authenticator: A,
     retries: u8,
 }
 
-impl TokenRetriever for TokenRetrieverWithCache {
+impl<A> TokenRetriever for TokenRetrieverWithCache<A>
+where
+    A: Authenticator,
+{
     fn retrieve(&self) -> Result<Token, TokenRetrieverError> {
         let mut cached_token = self
             .tokens
@@ -67,16 +74,18 @@ impl TokenRetriever for TokenRetrieverWithCache {
     }
 }
 
-impl TokenRetrieverWithCache {
+impl<A> TokenRetrieverWithCache<A>
+where
+    A: Authenticator,
+{
     pub fn new(
         client_id: ClientID,
-        token_url: Url,
         jwt_signer: JwtSignerImpl,
-        authenticator: HttpAuthenticator,
-    ) -> TokenRetrieverWithCache {
+        authenticator: A,
+    ) -> TokenRetrieverWithCache<A> {
         TokenRetrieverWithCache {
             client_id,
-            token_url,
+            aud: Url::from_str(DEFAULT_AUDIENCE).expect("constant valid url value"),
             tokens: Mutex::new(None),
             jwt_signer,
             authenticator,
@@ -101,11 +110,7 @@ impl TokenRetrieverWithCache {
             TokenRetrieverError::TokenRetrieverError("converting token expiration time".into())
         })?;
 
-        let claims = Claims::new(
-            self.client_id.to_owned(),
-            self.token_url.to_owned(),
-            timestamp,
-        );
+        let claims = Claims::new(self.client_id.to_owned(), self.aud.to_owned(), timestamp);
 
         let signed_jwt = self.jwt_signer.sign(claims)?;
 
@@ -132,11 +137,10 @@ mod test {
 
     use chrono::{TimeDelta, Utc};
     use mockall::{predicate::eq, Sequence};
-    use url::Url;
 
+    use crate::authenticator::test::MockAuthenticatorMock;
     #[cfg_attr(test, mockall_double::double)]
-    use crate::authenticator::HttpAuthenticator;
-
+    use crate::jwt::signer::JwtSignerImpl;
     use crate::{
         authenticator::{AuthenticateError, ClientAssertionType, GrantType, Request, Response},
         jwt::signed::SignedJwt,
@@ -145,16 +149,12 @@ mod test {
         TokenRetriever,
     };
 
-    #[cfg_attr(test, mockall_double::double)]
-    use crate::jwt::signer::JwtSignerImpl;
-
-    use super::TokenRetrieverWithCache;
+    use super::{TokenRetrieverWithCache, DEFAULT_AUDIENCE};
 
     #[test]
     // Test that a new token is retrieved when there is no cache and a cached token is
     // returned in case is not expired.
     fn retrieve_token_miss_hit_cache() {
-        let token_url = "https://fake.com/";
         let client_id = "client_id";
         let token_expires_in = 1;
 
@@ -168,7 +168,7 @@ mod test {
             .withf(move |claims| {
                 let exp = Utc::now() + DEFAULT_JWT_CLAIM_EXP;
                 claims.iss == client_id
-                    && claims.aud == token_url
+                    && claims.aud == DEFAULT_AUDIENCE
                     && claims.exp == exp.timestamp() as u64
             })
             .returning(move |_| {
@@ -184,7 +184,7 @@ mod test {
             client_assertion: fake_client_assertion.into(),
         };
 
-        let mut authenticator = HttpAuthenticator::new();
+        let mut authenticator = MockAuthenticatorMock::default();
         authenticator
             .expect_authenticate()
             .once()
@@ -197,12 +197,8 @@ mod test {
                 })
             });
 
-        let token_retriever = TokenRetrieverWithCache::new(
-            client_id.into(),
-            Url::parse(token_url).unwrap(),
-            jwt_signer,
-            authenticator,
-        );
+        let token_retriever =
+            TokenRetrieverWithCache::new(client_id.into(), jwt_signer, authenticator);
 
         let expected_token = Token::new(
             fake_token.into(),
@@ -236,7 +232,7 @@ mod test {
             })
         });
 
-        let mut authenticator = HttpAuthenticator::new();
+        let mut authenticator = MockAuthenticatorMock::default();
         authenticator
             .expect_authenticate()
             .times(2)
@@ -249,12 +245,8 @@ mod test {
                 })
             });
 
-        let token_retriever = TokenRetrieverWithCache::new(
-            client_id.into(),
-            Url::parse("https://fake.com/").unwrap(),
-            jwt_signer,
-            authenticator,
-        );
+        let token_retriever =
+            TokenRetrieverWithCache::new(client_id.into(), jwt_signer, authenticator);
 
         let cache_miss_token = token_retriever.retrieve().unwrap();
 
@@ -285,7 +277,7 @@ mod test {
             })
         });
 
-        let mut authenticator = HttpAuthenticator::new();
+        let mut authenticator = MockAuthenticatorMock::default();
         authenticator
             .expect_authenticate()
             .once()
@@ -295,13 +287,9 @@ mod test {
                 ))
             });
 
-        let token_retriever = TokenRetrieverWithCache::new(
-            client_id.into(),
-            Url::parse("https://fake.com/").unwrap(),
-            jwt_signer,
-            authenticator,
-        )
-        .with_retries(0);
+        let token_retriever =
+            TokenRetrieverWithCache::new(client_id.into(), jwt_signer, authenticator)
+                .with_retries(0);
 
         // Retries expired, error returned
         let cache_miss_token = token_retriever.retrieve();
@@ -326,7 +314,7 @@ mod test {
         });
 
         let mut auth_sequence = Sequence::new();
-        let mut authenticator = HttpAuthenticator::new();
+        let mut authenticator = MockAuthenticatorMock::default();
         authenticator
             .expect_authenticate()
             .once()
@@ -349,13 +337,9 @@ mod test {
                 })
             });
 
-        let token_retriever = TokenRetrieverWithCache::new(
-            client_id.into(),
-            Url::parse("https://fake.com/").unwrap(),
-            jwt_signer,
-            authenticator,
-        )
-        .with_retries(2);
+        let token_retriever =
+            TokenRetrieverWithCache::new(client_id.into(), jwt_signer, authenticator)
+                .with_retries(2);
 
         let expected_token = Token::new(
             fake_token.into(),
@@ -384,20 +368,16 @@ mod test {
             })
         });
 
-        let mut authenticator = HttpAuthenticator::new();
+        let mut authenticator = MockAuthenticatorMock::default();
         authenticator.expect_authenticate().returning(move |_| {
             Err(AuthenticateError::DeserializeError(
                 "some_serde_error".to_owned(),
             ))
         });
 
-        let token_retriever = TokenRetrieverWithCache::new(
-            client_id.into(),
-            Url::parse("https://fake.com/").unwrap(),
-            jwt_signer,
-            authenticator,
-        )
-        .with_retries(2);
+        let token_retriever =
+            TokenRetrieverWithCache::new(client_id.into(), jwt_signer, authenticator)
+                .with_retries(2);
 
         // Retries expired, error returned
         let cache_miss_token = token_retriever.retrieve();
