@@ -29,7 +29,7 @@ on:
 
 permissions:
   contents: read  # GITHUB_TOKEN only needs read; all writes use bot_token
-  
+
 jobs:
   prerelease:
     name: Create pre-release
@@ -50,7 +50,9 @@ jobs:
 
       - name: Generate release notes and update CHANGELOG
         id: release-data
-        uses: newrelic/release-toolkit/contrib/ohi-release-notes@v1
+        uses: newrelic/release-toolkit/contrib/ohi-release-notes@gsanchez/feat/configurable-prefix
+        with:
+          output-prefix: ""
 
       - name: Skip release if no changes found
         if: steps.release-data.outputs.skip-release == 'true'
@@ -66,13 +68,9 @@ jobs:
       - name: Bump version in Cargo.toml
         if: steps.release-data.outputs.skip-release != 'true'
         run: |
-          # Strip leading 'v' since Cargo.toml versions are bare (e.g. 1.2.3, not v1.2.3)
-          BARE_VERSION="${{ steps.release-data.outputs.next-version }}"
-          BARE_VERSION="${BARE_VERSION#v}"
+          cargo set-version --manifest-path "${{ inputs.cargo_toml_path }}" "${{ steps.release-data.outputs.next-version }}"
 
-          cargo set-version --manifest-path "${{ inputs.cargo_toml_path }}" "${BARE_VERSION}"
-
-          echo "Bumped version to ${BARE_VERSION} in ${{ inputs.cargo_toml_path }}"
+          echo "Bumped version to "${{ steps.release-data.outputs.next-version }}" in ${{ inputs.cargo_toml_path }}"
 
       - name: Commit updated files
         if: steps.release-data.outputs.skip-release != 'true'
