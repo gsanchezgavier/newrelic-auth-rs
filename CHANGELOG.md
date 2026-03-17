@@ -8,8 +8,16 @@ Unreleased section should follow [Release Toolkit](https://github.com/newrelic/r
 
 ## Unreleased
 
-### bugfix
+## v0.1.5 - 2026-03-17
+
+### 🐞 Bug fixes
 - just a test to validate the actions workflow is working as expected
+
+### ⛓️ Dependencies
+- Updated rust crate tokio to 1.50.0
+- Updated rust to v1.94.0
+- Updated rust crate uuid to 1.22.0
+- Updated minor and patch updates
 
 ## v0.1.4 - 2026-03-02
 
