@@ -8,5 +8,5 @@ Unreleased section should follow [Release Toolkit](https://github.com/newrelic/r
 
 ## Unreleased
 
-### Breaking
+### bugfix
 - just a test to validate the actions workflow is working as expected
