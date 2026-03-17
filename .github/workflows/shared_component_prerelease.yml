@@ -26,9 +26,9 @@ on:
     secrets:
       bot_token:
         required: true
-
-permissions:
-  contents: read  # GITHUB_TOKEN only needs read; all writes use bot_token
+# TODO just for test with GITHUB_TOKEN
+# permissions:
+#   contents: read  # GITHUB_TOKEN only needs read; all writes use bot_token
 
 jobs:
   prerelease:
