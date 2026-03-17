@@ -50,8 +50,9 @@ jobs:
 
       - name: Generate release notes and update CHANGELOG
         id: release-data
-        uses: newrelic/release-toolkit/contrib/ohi-release-notes@gsanchez/feat/configurable-prefix
+        uses: newrelic/release-toolkit/contrib/ohi-release-notes@v1
         with:
+          # overrides the default "v" prefix for the version.
           output-prefix: ""
 
       - name: Skip release if no changes found
