@@ -68,6 +68,7 @@ jobs:
       - name: Bump version in Cargo.toml
         if: steps.release-data.outputs.skip-release != 'true'
         run: |
+          cargo install cargo-edit
           cargo set-version --manifest-path "${{ inputs.cargo_toml_path }}" "${{ steps.release-data.outputs.next-version }}"
 
           echo "Bumped version to "${{ steps.release-data.outputs.next-version }}" in ${{ inputs.cargo_toml_path }}"
