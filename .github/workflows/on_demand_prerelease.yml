@@ -1,0 +1,17 @@
+name: ⏯️ Generate pre-release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  # TODO just for test with GITHUB_TOKEN, then can be switched to read as the bot token is used for all writes
+  contents: write
+  # contents: read
+
+jobs:
+  prerelease:
+    uses: ./.github/workflows/shared_component_prerelease.yml
+    with:
+      cargo_toml_path: Cargo.toml
+    secrets:
+      bot_token: ${{ secrets.GITHUB_TOKEN }}
