@@ -1,0 +1,13 @@
+name: ⏯️ Generate Pre-Release PR
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prerelease:
+    uses: newrelic/newrelic-agent-control/.github/workflows/shared_create_prerelease_pr.yml@main
+    secrets:
+      bot_token: ${{ secrets.AC_BOT_TOKEN }}

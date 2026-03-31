@@ -1,0 +1,13 @@
+name: 🚀 Create pre-release on merge prerelease PR
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  prerelease:
+    uses: newrelic/newrelic-agent-control/.github/workflows/shared_create_prerelease.yml@main
