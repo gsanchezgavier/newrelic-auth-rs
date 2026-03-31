@@ -11,5 +11,3 @@ jobs:
   prerelease:
     uses: ./.github/workflows/shared_create_prerelease_pr.yml
     # uses: newrelic/newrelic-agent-control/.github/workflows/shared_create_prerelease_pr.yml@main
-    secrets:
-      bot_token: ${{ secrets.GITHUB_TOKEN }}
