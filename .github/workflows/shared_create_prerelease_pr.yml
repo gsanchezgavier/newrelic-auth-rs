@@ -80,7 +80,7 @@ jobs:
           git checkout -b "$branch"
           git add CHANGELOG.md "${{ inputs.cargo_toml_path }}"
           git commit -m "chore(release): prepare ${{ steps.release-data.outputs.next-version }}"
-          git push -u origin "$branch"
+          git push -u origin "$branch" --force
           gh pr create \
             --title "chore(release): prepare ${{ steps.release-data.outputs.next-version }}" \
             --body-file CHANGELOG.partial.md \
