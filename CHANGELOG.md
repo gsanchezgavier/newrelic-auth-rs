@@ -7,8 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Unreleased section should follow [Release Toolkit](https://github.com/newrelic/release-toolkit/blob/main/README.md).
 
 ## Unreleased
-### bugfix
-- test1
+
+## v0.2.0 - 2026-03-31
+
+### ⛓️ Dependencies
+- Upgraded reqwest to 0.13.2
+- Upgraded chrono, clap, uuid, tempfile and other minor crates
+- Upgraded github actions and rust toolchain
+
+### 🚀 Enhancements
+- Replace ring with aws_lc_rs in rcgen dependency
+
+### ⛓️ Dependencies
+- Updated rust crate tokio to 1.50.0
+- Updated rust to v1.94.1
+- Updated rust crate uuid to 1.23.0
+- Updated minor and patch updates
+- Updated rust crate vaultrs to 0.8.0
+- Updated rust crate sha2 to 0.11.0
+
 ## v0.1.4 - 2026-03-02
 
 ### 🚀 Enhancements
