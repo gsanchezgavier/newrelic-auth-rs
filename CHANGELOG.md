@@ -8,8 +8,15 @@ Unreleased section should follow [Release Toolkit](https://github.com/newrelic/r
 
 ## Unreleased
 
-### enhancement
+## v0.3.0 - 2026-03-31
+
+### 🚀 Enhancements
 - test1
+
+### ⛓️ Dependencies
+- Updated rust crate sha2 to 0.11.0
+- Updated rust to v1.94.1
+- Updated rust crate uuid to 1.23.0
 
 ## v0.1.4 - 2026-03-02
 
