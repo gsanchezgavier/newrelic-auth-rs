@@ -1,0 +1,44 @@
+# Reusable workflow — second half of the release flow.
+# Pair with shared_create_prerelease_pr.yml, which opens the 'chore/release-<version>' PR.
+# Call this from a 'pull_request: closed' trigger on your default branch; the guards
+# (merged == true, chore/release-* branch) are enforced here so callers need no extra conditions.
+# Version is extracted from the branch name; release notes come from the PR body.
+name: 🚀 Create pre-release
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  create-prerelease:
+    name: Create pre-release
+    if: |
+      github.event.pull_request.merged == true &&
+      startsWith(github.event.pull_request.head.ref, 'chore/release-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version and release notes
+        id: resolve
+        env:
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          version="${PR_BRANCH#chore/release-}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Error: '$version' is not a valid semver string (extracted from branch '$PR_BRANCH')."
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          printf '%s' "$PR_BODY" > release-notes.md
+
+      - name: Create GitHub pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.resolve.outputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --title "${{ steps.resolve.outputs.version }}" \
+            --notes-file release-notes.md \
+            --prerelease

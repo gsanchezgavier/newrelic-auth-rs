@@ -10,4 +10,5 @@ permissions:
 
 jobs:
   prerelease:
-    uses: newrelic/newrelic-agent-control/.github/workflows/shared_create_prerelease.yml@main
+    uses: ./.github/workflows/shared_create_prerelease.yml
+    # uses: newrelic/newrelic-agent-control/.github/workflows/shared_create_prerelease.yml@main

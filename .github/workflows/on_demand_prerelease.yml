@@ -4,10 +4,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
   prerelease:
-    uses: newrelic/newrelic-agent-control/.github/workflows/shared_create_prerelease_pr.yml@main
+    uses: ./.github/workflows/shared_create_prerelease_pr.yml
+    # uses: newrelic/newrelic-agent-control/.github/workflows/shared_create_prerelease_pr.yml@main
     secrets:
-      bot_token: ${{ secrets.AC_BOT_TOKEN }}
+      bot_token: ${{ secrets.GITHUB_TOKEN }}
