@@ -1,7 +1,7 @@
 use crate::http::config::HttpConfig;
 use crate::http_client::{HttpClient as OauthHttpClient, HttpClientError as OauthHttpClientError};
 use http::Request;
-use http::{Response as HttpResponse, Response};
+use http::{Response as HttpResponse, Response, StatusCode};
 use reqwest::blocking::{Client, Response as BlockingResponse};
 use reqwest::tls::TlsInfo;
 use reqwest::{Certificate, Proxy};
@@ -10,6 +10,8 @@ use std::{
     path::{Path, PathBuf},
 };
 use tracing::{debug, warn};
+
+type ReqwestError = reqwest::Error;
 
 const CERT_EXTENSION: &str = "pem";
 #[derive(Debug, Clone)]
@@ -52,11 +54,18 @@ impl HttpClient {
 
         debug!("Request body: {:?}", req);
 
-        let res = req
-            .send()
-            .map_err(|err| HttpResponseError::TransportError(err.to_string()))?;
+        let res = req.send().map_err(from_reqwest_error)?;
 
-        try_build_response(res)
+        if res.status().is_success() {
+            try_build_response(res)
+        } else {
+            let status_code = res.status();
+            let body = res
+                .bytes()
+                .map_err(|err| HttpResponseError::ReadingResponse(err.to_string()))?
+                .to_vec();
+            Err(HttpResponseError::UnsuccessfulResponse { status_code, body })
+        }
     }
 }
 
@@ -160,10 +169,23 @@ impl OauthHttpClient for HttpClient {
 impl From<HttpResponseError> for OauthHttpClientError {
     fn from(err: HttpResponseError) -> Self {
         match err {
-            HttpResponseError::TransportError(msg) => OauthHttpClientError::TransportError(msg),
-            HttpResponseError::BuildingResponse(msg) | HttpResponseError::ReadingResponse(msg) => {
+            HttpResponseError::ConnectError(_)
+            | HttpResponseError::TimeoutError(_)
+            | HttpResponseError::DnsError(_)
+            | HttpResponseError::GenericTransportError(_) => {
+                OauthHttpClientError::TransportError(err.to_string())
+            }
+            HttpResponseError::UnsuccessfulResponse { status_code, body } => {
+                let msg = format!(
+                    "HTTP Error {}: {}",
+                    status_code,
+                    String::from_utf8_lossy(&body)
+                );
                 OauthHttpClientError::InvalidResponse(msg)
             }
+            HttpResponseError::BuildingRequest(msg)
+            | HttpResponseError::BuildingResponse(msg)
+            | HttpResponseError::ReadingResponse(msg) => OauthHttpClientError::InvalidResponse(msg),
         }
     }
 }
@@ -174,8 +196,45 @@ enum HttpResponseError {
     ReadingResponse(String),
     #[error("could not build response: {0}")]
     BuildingResponse(String),
-    #[error("http transport error: `{0}`")]
-    TransportError(String),
+    #[error("could not build request: {0}")]
+    BuildingRequest(String),
+    /// Represents a response that was received, but had a non-successful status code.
+    #[error(
+        "unsuccessful response: {status_code} - body: {}",
+        String::from_utf8_lossy(body)
+    )]
+    UnsuccessfulResponse {
+        status_code: StatusCode,
+        body: Vec<u8>,
+    },
+    #[error(
+        "connection error: could not connect to the host. this is often caused by a firewall, proxy, or network routing issue. original error: {0}"
+    )]
+    ConnectError(#[source] ReqwestError),
+    #[error("timeout error: the request timed out. original error: {0}")]
+    TimeoutError(#[source] ReqwestError),
+    #[error(
+        "dns resolution error: could not resolve the host. please check your dns configuration. original error: {0}"
+    )]
+    DnsError(#[source] ReqwestError),
+    #[error("generic transport error: {0}")]
+    GenericTransportError(#[source] ReqwestError),
+}
+
+fn from_reqwest_error(e: ReqwestError) -> HttpResponseError {
+    if e.is_connect() {
+        HttpResponseError::ConnectError(e)
+    } else if e.is_timeout() {
+        HttpResponseError::TimeoutError(e)
+    } else if e.is_builder() || e.is_request() {
+        if e.to_string().to_lowercase().contains("dns") {
+            HttpResponseError::DnsError(e)
+        } else {
+            HttpResponseError::BuildingRequest(e.to_string())
+        }
+    } else {
+        HttpResponseError::GenericTransportError(e)
+    }
 }
 
 #[cfg(test)]
@@ -188,6 +247,7 @@ mod tests {
     use httpmock::MockServer;
     use std::fs::File;
     use std::io::Write;
+    use std::time::Duration;
     use tempfile::tempdir;
 
     const INVALID_TESTING_CERT: &str =
@@ -317,5 +377,41 @@ mod tests {
         let ca_bundle_file = PathBuf::default();
         let certificates = certs_from_paths(&ca_bundle_file, ca_bundle_dir).unwrap();
         assert_eq!(certificates.len(), 1);
+    }
+
+    #[test]
+    fn test_error_conversions() {
+        let http_err = HttpResponseError::UnsuccessfulResponse {
+            status_code: StatusCode::UNAUTHORIZED,
+            body: b"invalid token".to_vec(),
+        };
+        let oauth_err: OauthHttpClientError = http_err.into();
+        assert_matches!(oauth_err, OauthHttpClientError::InvalidResponse(_));
+        assert!(oauth_err.to_string().contains("HTTP Error 401"));
+    }
+
+    #[test]
+    fn test_http_client_timeout() {
+        let mock_server = MockServer::start();
+        mock_server.mock(|when, then| {
+            when.path("/");
+            then.delay(Duration::from_millis(200)).status(200);
+        });
+
+        let http_config = HttpConfig::new(
+            Duration::from_millis(50),
+            Duration::from_millis(50),
+            Default::default(),
+        );
+        let http_client = HttpClient::new(http_config).unwrap();
+
+        let request = Request::builder()
+            .uri(mock_server.url("/").as_str())
+            .method("GET")
+            .body(Vec::new())
+            .unwrap();
+
+        let result = http_client.send(request);
+        assert_matches!(result, Err(HttpResponseError::TimeoutError(_)));
     }
 }
