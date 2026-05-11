@@ -19,7 +19,7 @@ reqwest = { version = "0.13.3", features = ["blocking", "socks", "json"] }
 uuid = { version = "1.23.1", features = ["serde", "v7"] }
 tracing = "0.1.44"
 http = "1.4.0"
-rcgen = { version = "0.14.7", default-features = false, features = ["aws_lc_rs", "pem"] }
+rcgen = { version = "0.14.8", default-features = false, features = ["aws_lc_rs", "pem"] }
 base64 = "0.22.1"
 tracing-subscriber = "0.3.23"
 
