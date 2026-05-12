@@ -25,7 +25,8 @@ on:
         required: true
 
 permissions:
-  contents: read  # GITHUB_TOKEN only needs read; all writes use the app token.
+  # required to create a branch in the repo
+  contents: write
 
 env:
   # Prefix of the auto-opened pre-release PR branch. Must match the filter used
@@ -69,25 +70,17 @@ jobs:
           exit 1
 
       - name: Bump version in Cargo.toml
+        env:
+          VERSION: ${{ steps.release-data.outputs.next-version }}
+          CARGO_TOML_PATH: ${{ inputs.cargo_toml_path }}
         run: |
-          cargo install cargo-edit
-          cargo set-version --manifest-path "${{ inputs.cargo_toml_path }}" "${{ steps.release-data.outputs.next-version }}"
-          echo "Bumped version to ${{ steps.release-data.outputs.next-version }} in ${{ inputs.cargo_toml_path }}"
-      
-      # The steps.app-token.outputs.token is masked to avoid leaks on logs.
-      - name: Generate app token
-        id: app-token
-        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
-        with:
-          app-id: ${{ secrets.app_id }}
-          private-key: ${{ secrets.app_private_key }}
+          sed -i "s/^version = .*/version = \"$VERSION\"/" "$CARGO_TOML_PATH"
+          grep -n '^version = ' "$CARGO_TOML_PATH"
 
-      # Commits are created via the GraphQL `createCommitOnBranch` mutation so GitHub
-      # signs them automatically on behalf of the App (branch protection requires
-      # signed commits). No local git identity / push is needed.
+      # Commits are created via the GraphQL `createCommitOnBranch` mutation so GitHub signs them automatically.
       - name: Create release branch and commit files (signed via API)
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ env.RELEASE_BRANCH_PREFIX }}${{ steps.release-data.outputs.next-version }}
           VERSION: ${{ steps.release-data.outputs.next-version }}
@@ -126,6 +119,15 @@ jobs:
               }
             }' | gh api graphql --input -
 
+      - name: Generate app token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.app_id }}
+          private-key: ${{ secrets.app_private_key }}
+
+      # CI workflows does not run when a PR is created using the GITHUB_TOKEN (actions app)
+      # So we use the AC app in order overcome that limitation.
       - name: Create pull request
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
