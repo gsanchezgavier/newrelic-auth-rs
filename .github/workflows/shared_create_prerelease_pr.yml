@@ -25,7 +25,7 @@ on:
         required: true
 
 permissions:
-  contents: read  # GITHUB_TOKEN only needs read; all writes use the app token.
+  contents: write  # GITHUB_TOKEN only needs read; all writes use the app token.
 
 env:
   # Prefix of the auto-opened pre-release PR branch. Must match the filter used
@@ -87,7 +87,7 @@ jobs:
       # signed commits). No local git identity / push is needed.
       - name: Create release branch and commit files (signed via API)
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           BRANCH: ${{ env.RELEASE_BRANCH_PREFIX }}${{ steps.release-data.outputs.next-version }}
           VERSION: ${{ steps.release-data.outputs.next-version }}
