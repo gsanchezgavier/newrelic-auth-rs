@@ -8,6 +8,9 @@ Unreleased section should follow [Release Toolkit](https://github.com/newrelic/r
 
 ## Unreleased
 
+### Enhancements
+- just a test
+
 ## v0.1.4 - 2026-03-02
 
 ### 🚀 Enhancements
